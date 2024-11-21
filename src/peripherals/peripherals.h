@@ -26,37 +26,60 @@ static inline void pinInit(void) {
   #endif
 }
 
-// Actuating the heater element
-static inline void setBoilerOn(void) {
-  digitalWrite(relayPin, HIGH);  // boilerPin -> HIGH
-}
-
-static inline void setBoilerOff(void) {
-  digitalWrite(relayPin, LOW);  // boilerPin -> LOW
-}
-
-static inline void setSteamValveRelayOn(void) {
+static inline void openSteamValve(void) {
   #ifdef steamValveRelayPin
   digitalWrite(steamValveRelayPin, HIGH);  // steamValveRelayPin -> HIGH
   #endif
 }
 
-static inline void setSteamValveRelayOff(void) {
+static inline void closeSteamValve(void) {
   #ifdef steamValveRelayPin
   digitalWrite(steamValveRelayPin, LOW);  // steamValveRelayPin -> LOW
   #endif
 }
 
-static inline void setSteamBoilerRelayOn(void) {
+static int brewBoilerTimeTurnedOff = 0;
+
+static inline void setSteamBoilerOn(void) {
   #ifdef steamBoilerRelayPin
   digitalWrite(steamBoilerRelayPin, HIGH);  // steamBoilerRelayPin -> HIGH
   #endif
 }
 
-static inline void setSteamBoilerRelayOff(void) {
+static inline void setSteamBoilerOff(void) {
   #ifdef steamBoilerRelayPin
   digitalWrite(steamBoilerRelayPin, LOW);  // steamBoilerRelayPin -> LOW
   #endif
+}
+
+static inline void setBrewBoilerOff(void) {
+  digitalWrite(relayPin, LOW);  // boilerPin -> LOW
+
+  if (brewBoilerTimeTurnedOff == 0) {
+    brewBoilerTimeTurnedOff = millis();
+  }
+}
+
+// Actuating the heater element for brew 
+static inline void setBrewBoilerOnSteamOff(void) {
+  setSteamBoilerOff();
+  digitalWrite(relayPin, HIGH);  // boilerPin -> HIGH
+  brewBoilerTimeTurnedOff = 0;
+}
+
+static inline void setBrewBoilerOffSteamOn(void) {
+  digitalWrite(relayPin, LOW);  // boilerPin -> LOW
+  
+  // This is just used to de-bounce the calls to this function  when the temp is 
+  // hovering around the set point -- only kick this on if 
+  // excessive toggling of the steam relay    
+  if (brewBoilerTimeTurnedOff == 0) {
+    brewBoilerTimeTurnedOff = millis();
+  }
+
+  if (millis() - brewBoilerTimeTurnedOff > 1000) {
+    setSteamBoilerOn();
+  }
 }
 
 //Function to get the state of the brew switch button
@@ -79,7 +102,7 @@ static inline bool waterPinState(void) {
   #endif
 }
 
-static inline void openValve(void) {
+static inline void openBrewValve(void) {
   #if defined LEGO_VALVE_RELAY
     digitalWrite(valvePin, LOW);
   #else
@@ -87,7 +110,7 @@ static inline void openValve(void) {
   #endif
 }
 
-static inline void closeValve(void) {
+static inline void closeBrewValve(void) {
   #if defined LEGO_VALVE_RELAY
     digitalWrite(valvePin, HIGH);
   #else
