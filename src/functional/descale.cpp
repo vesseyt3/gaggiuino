@@ -16,8 +16,8 @@ void deScale(eepromValues_t &runningCfg, const SensorState &currentState) {
     case DescalingState::IDLE: // Waiting for fuckfest to begin
       if (currentState.brewSwitchState) {
         ACTIVE_PROFILE(runningCfg).setpoint = 9;
-        openValve();
-        setSteamValveRelayOn();
+        openBrewValve();
+        openSteamValve();
         descalingState = DescalingState::DESCALING_PHASE1;
         descalingCycle = 0;
         descalingTimer = millis();
@@ -61,8 +61,8 @@ void deScale(eepromValues_t &runningCfg, const SensorState &currentState) {
       break;
     case DescalingState::FINISHED: // Scale successufuly fucked
       setPumpOff();
-      closeValve();
-      setSteamValveRelayOff();
+      closeBrewValve();
+      closeSteamValve();
       currentState.brewSwitchState ? descalingState = DescalingState::FINISHED : descalingState = DescalingState::IDLE;
       if (millis() - descalingTimer > 1000) {
         lcdBrewTimerStop();
@@ -76,20 +76,20 @@ void deScale(eepromValues_t &runningCfg, const SensorState &currentState) {
 
 void solenoidBeat() {
   setPumpFullOn();
-  closeValve();
+  closeBrewValve();
   delay(1000);
   watchdogReload();
-  openValve();
+  openBrewValve();
   delay(200);
-  closeValve();
+  closeBrewValve();
   delay(1000);
   watchdogReload();
-  openValve();
+  openBrewValve();
   delay(200);
-  closeValve();
+  closeBrewValve();
   delay(1000);
   watchdogReload();
-  openValve();
+  openBrewValve();
   setPumpOff();
 }
 
@@ -114,14 +114,14 @@ void backFlush(const SensorState &currentState) {
 
 void flushActivated(void) {
   #if defined SINGLE_BOARD || defined LEGO_VALVE_RELAY
-      openValve();
+      openBrewValve();
   #endif
   setPumpFullOn();
 }
 
 void flushDeactivated(void) {
   #if defined SINGLE_BOARD || defined LEGO_VALVE_RELAY
-      closeValve();
+      closeBrewValve();
   #endif
   setPumpOff();
 }
@@ -134,14 +134,14 @@ void flushPhases(void) {
         flushCounter++;
         timer = millis();
       }
-      openValve();
+      openBrewValve();
       setPumpFullOn();
     } else {
       if (millis() - timer >= 5000) {
         flushCounter++;
         timer = millis();
       }
-      closeValve();
+      closeBrewValve();
       setPumpOff();
     }
   } else {

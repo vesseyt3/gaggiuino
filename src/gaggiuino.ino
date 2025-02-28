@@ -22,7 +22,7 @@ OPERATION_MODES selectedOperationalMode;
 
 eepromValues_t runningCfg;
 
-SystemState systemState;
+SystemState systemState = { 0 };
 
 LED led;
 TOF tof;
@@ -35,17 +35,18 @@ void setup(void) {
   pinInit();
   LOG_INFO("Pin init");
 
-  setBoilerOff();  // relayPin LOW
-  setSteamValveRelayOff();
-  setSteamBoilerRelayOff();
+  // Boilers
+  setBrewBoilerOff();
+  setSteamBoilerOff();
   LOG_INFO("Boiler turned off");
 
   //Pump
   setPumpOff();
   LOG_INFO("Pump turned off");
 
-  // Valve
-  closeValve();
+  // Valves
+  closeBrewValve();
+  closeSteamValve();
   LOG_INFO("Valve closed");
 
   lcdInit();
@@ -306,7 +307,7 @@ static void modeSelect(void) {
       nonBrewModeActive = true;
       if (!currentState.steamSwitchState) steamTime = millis();
       backFlush(currentState);
-      brewActive ? setBoilerOff() : justDoCoffee(runningCfg, currentState, false);
+      brewActive ? setBrewBoilerOff() : justDoCoffee(runningCfg, currentState, false);
       break;
     case OPERATION_MODES::OPMODE_steam:
       nonBrewModeActive = true;
@@ -699,22 +700,22 @@ static void profiling(void) {
 
     if (phaseProfiler.isFinished()) {
       setPumpOff();
-      closeValve();
+      closeBrewValve();
       brewActive = false;
     } else if (currentPhase.getType() == PHASE_TYPE::PHASE_TYPE_PRESSURE) {
       float newBarValue = currentPhase.getTarget();
       float flowRestriction =  currentPhase.getRestriction();
-      openValve();
+      openBrewValve();
       setPumpPressure(newBarValue, flowRestriction, currentState);
     } else {
       float newFlowValue = currentPhase.getTarget();
       float pressureRestriction =  currentPhase.getRestriction();
-      openValve();
+      openBrewValve();
       setPumpFlow(newFlowValue, pressureRestriction, currentState);
     }
   } else {
     setPumpOff();
-    closeValve();
+    closeBrewValve();
   }
   // Keep that water at temp
   justDoCoffee(runningCfg, currentState, brewActive);
@@ -722,12 +723,12 @@ static void profiling(void) {
 
 static void manualFlowControl(void) {
   if (brewActive) {
-    openValve();
+    openBrewValve();
     float flow_reading = lcdGetManualFlowVol() / 10.f ;
     setPumpFlow(flow_reading, 0.f, currentState);
   } else {
     setPumpOff();
-    closeValve();
+    closeBrewValve();
   }
   justDoCoffee(runningCfg, currentState, brewActive);
 }
@@ -806,8 +807,8 @@ static inline void sysHealthCheck(float pressureThreshold) {
     /* In the event of the temp failing to read while the SSR is HIGH
     we force set it to LOW while trying to get a temp reading - IMPORTANT safety feature */
     setPumpOff();
-    setBoilerOff();
-    setSteamBoilerRelayOff();
+    setBrewBoilerOff();
+    setSteamBoilerOff();
     if (millis() > thermoTimer) {
       LOG_ERROR("Cannot read temp from thermocouple (last read: %.1lf)!", static_cast<double>(currentState.temperature));
       currentState.steamSwitchState ? lcdShowPopup("COOLDOWN") : lcdShowPopup("TEMP READ ERROR"); // writing a LCD message
@@ -822,8 +823,8 @@ static inline void sysHealthCheck(float pressureThreshold) {
     watchdogReload();
     lcdShowPopup("TURN STEAM OFF NOW!");
     setPumpOff();
-    setBoilerOff();
-    setSteamBoilerRelayOff();
+    setBrewBoilerOff();
+    setSteamBoilerOff();
     currentState.isSteamForgottenON = currentState.steamSwitchState;
   }
 
@@ -855,14 +856,14 @@ static inline void sysHealthCheck(float pressureThreshold) {
           sensorsRead();
           lcdShowPopup("Releasing pressure!");
           setPumpOff();
-          setBoilerOff();
-          setSteamValveRelayOff();
-          setSteamBoilerRelayOff();
-          openValve();
+          setBrewBoilerOff();
+          closeSteamValve();
+          setSteamBoilerOff();
+          openBrewValve();
           break;
       }
     }
-    closeValve();
+    closeBrewValve();
     systemHealthTimer = millis() + HEALTHCHECK_EVERY;
   }
   // Throwing a pressure release countodown.
@@ -937,15 +938,21 @@ static void fillBoilerUntilThreshod(unsigned long elapsedTime) {
     return;
   }
 
-  if (isBoilerFull(elapsedTime)) {
-    closeValve();
+  if (isBoilerFull(elapsedTime) && !systemState.brewBoilerFilled) {
+    closeBrewValve();
+    openSteamValve();
+    systemState.brewBoilerFilled = true;
+  }
+  else if (currentState.smoothedPressure > activeSteamPressure_) {
     setPumpOff();
+    closeSteamValve();
     systemState.startupInitFinished = true;
-    return;
   }
 
   lcdShowPopup("Filling boiler!");
-  openValve();
+  if (!systemState.brewBoilerFilled) {
+    openBrewValve();
+  }
   setPumpToRawValue(35);
 }
 
